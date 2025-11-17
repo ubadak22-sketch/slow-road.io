@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nova Roads</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- CAR SELECT -->
+    <div id="carSelectMenu">
+        <h2>Select Your Car</h2>
+        <div class="car-row">
+            <button class="carBtn" data-car="audi">Audi</button>
+            <button class="carBtn" data-car="bugatti">Bugatti</button>
+            <button class="carBtn" data-car="ferrari">Ferrari</button>
+            <button class="carBtn" data-car="mercedes">Mercedes</button>
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div id="speedometer">0 km/h</div>
+        <div id="nitro">Nitro: Ready</div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobileControls">
+        <button id="leftBtn" class="mobileBtn">◀</button>
+        <button id="boostBtn" class="mobileBtn">BOOST</button>
+        <button id="rightBtn" class="mobileBtn">▶</button>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
