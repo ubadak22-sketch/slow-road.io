@@ -1,70 +1,120 @@
-// ---------- THREE.js setup ----------
+// ============================================
+//  BASIC THREE.JS SETUP
+// ============================================
+
 const canvas = document.getElementById("game");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearAlpha(1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x87ceeb, 5, 120);
+scene.background = new THREE.Color(0x87ceeb); // sky
+scene.fog = new THREE.Fog(0x87ceeb, 20, 180);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(
+    70, window.innerWidth / window.innerHeight, 0.1, 1000
+);
 camera.position.set(0, 3, -7);
 
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 10, 5);
-scene.add(light);
+// ============================================
+//  LIGHTING
+// ============================================
 
-// ---------- Terrain & road ----------
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(50, 100, -20);
+scene.add(sun);
+
+// ============================================
+//  SKYDOME (OPTIONAL, but makes game pretty)
+// ============================================
+
+function makeSky() {
+    const geo = new THREE.SphereGeometry(500, 32, 32);
+    const mat = new THREE.MeshBasicMaterial({
+        color: 0x87ceeb,
+        side: THREE.BackSide
+    });
+    const sky = new THREE.Mesh(geo, mat);
+    scene.add(sky);
+}
+makeSky();
+
+// ============================================
+//  TERRAIN / GROUND
+// ============================================
+
 function createTerrain() {
-    const geo = new THREE.BoxGeometry(400, 1, 400);
-    const mat = new THREE.MeshLambertMaterial({ color: 0x1f8a3d });
-    const terrain = new THREE.Mesh(geo, mat);
-    terrain.position.set(0, -0.5, 0);
-    scene.add(terrain);
+    const geo = new THREE.BoxGeometry(500, 1, 500);
+    const mat = new THREE.MeshPhongMaterial({
+        color: 0x2a963f,
+        shininess: 5,
+        specular: 0x003300
+    });
+    const ground = new THREE.Mesh(geo, mat);
+    ground.position.set(0, -0.5, 0);
+    scene.add(ground);
 }
 createTerrain();
 
+// ============================================
+//  ROAD
+// ============================================
+
 let roadSegments = [];
+
 function createRoad(zPos) {
     const geo = new THREE.BoxGeometry(10, 0.12, 60);
-    const mat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-    const r = new THREE.Mesh(geo, mat);
-    r.position.set(0, 0, zPos);
-    scene.add(r);
-    roadSegments.push(r);
+    const mat = new THREE.MeshPhongMaterial({
+        color: 0x2f2f2f,
+        shininess: 10,
+        specular: 0x111111
+    });
+    const road = new THREE.Mesh(geo, mat);
+    road.position.set(0, 0, zPos);
+    scene.add(road);
+    roadSegments.push(road);
 }
+
 for (let i = 0; i < 6; i++) createRoad(i * 60);
 
-// ---------- Car factory ----------
+// ============================================
+//  CAR BUILDER
+// ============================================
+
 let car = null;
 let currentCarStats = {};
 
+function carColor(type) {
+    return {
+        audi: 0x3b82f6,
+        bugatti: 0xf97316,
+        ferrari: 0xef4444,
+        mercedes: 0x9ca3af
+    }[type] || 0xffffff;
+}
+
 function makeCar(type) {
     const group = new THREE.Group();
+    const color = carColor(type);
 
-    let bodyColor;
-    if (type === "audi") bodyColor = 0x3b82f6;
-    if (type === "bugatti") bodyColor = 0xf97316;
-    if (type === "ferrari") bodyColor = 0xef4444;
-    if (type === "mercedes") bodyColor = 0x9ca3af;
-
-    // body
     const body = new THREE.Mesh(
         new THREE.BoxGeometry(1.4, 0.5, 2.6),
-        new THREE.MeshLambertMaterial({ color: bodyColor })
+        new THREE.MeshLambertMaterial({ color })
     );
     body.position.y = 0.5;
     group.add(body);
 
-    // cabin
     const cabin = new THREE.Mesh(
-        new THREE.BoxGeometry(1.0, 0.38, 1.2),
+        new THREE.BoxGeometry(1, 0.4, 1.2),
         new THREE.MeshLambertMaterial({ color: 0x111111 })
     );
     cabin.position.set(0, 0.88, -0.15);
     group.add(cabin);
 
-    // wheels
     function wheel(x, z) {
         const w = new THREE.Mesh(
             new THREE.CylinderGeometry(0.28, 0.28, 0.35, 12),
@@ -74,18 +124,11 @@ function makeCar(type) {
         w.position.set(x, 0.25, z);
         return w;
     }
+
     group.add(wheel(0.7, 1.05));
     group.add(wheel(-0.7, 1.05));
     group.add(wheel(0.7, -1.05));
     group.add(wheel(-0.7, -1.05));
-
-    // spoiler (small)
-    const spoiler = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.05, 0.15),
-        new THREE.MeshLambertMaterial({ color: 0x111111 })
-    );
-    spoiler.position.set(0, 0.75, 1.1);
-    group.add(spoiler);
 
     return group;
 }
@@ -96,186 +139,127 @@ function spawnCar(type) {
     car.position.set(0, 0.5, 2);
     scene.add(car);
 
-    // stats by type (tuned)
     const stats = {
-        audi: { maxSpeed: 0.55, accel: 0.012, handling: 0.04, driftFactor: 0.96, nitroBoost: 1.7 },
-        bugatti: { maxSpeed: 0.85, accel: 0.016, handling: 0.035, driftFactor: 0.93, nitroBoost: 1.9 },
-        ferrari: { maxSpeed: 0.75, accel: 0.015, handling: 0.045, driftFactor: 0.94, nitroBoost: 1.8 },
-        mercedes: { maxSpeed: 0.65, accel: 0.013, handling: 0.05, driftFactor: 0.97, nitroBoost: 1.6 }
+        audi:     { maxSpeed: 0.55, accel: 0.012, handling: 0.04, drift: 0.96, nitro: 1.6 },
+        bugatti:  { maxSpeed: 0.85, accel: 0.016, handling: 0.035, drift: 0.93, nitro: 2.0 },
+        ferrari:  { maxSpeed: 0.75, accel: 0.015, handling: 0.045, drift: 0.94, nitro: 1.8 },
+        mercedes: { maxSpeed: 0.65, accel: 0.013, handling: 0.05, drift: 0.97, nitro: 1.5 }
     };
-    currentCarStats = stats[type] || stats.audi;
 
-    // reset dynamics
-    currentSpeed = 0;
-    xVel = 0;
-    nitroReady = true;
-    nitroActive = false;
-    nitroCooldown = 0;
-    updateNitroHUD();
+    currentCarStats = stats[type];
 }
 
-// ---------- Controls & dynamics ----------
+// ============================================
+//  CAR CONTROLS / PHYSICS
+// ============================================
+
 let keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// mobile buttons
-const leftBtn = document.getElementById("leftBtn");
-const rightBtn = document.getElementById("rightBtn");
-const boostBtn = document.getElementById("boostBtn");
-
-let mobileLeft = false, mobileRight = false, mobileBoost = false;
-leftBtn.addEventListener("touchstart", () => mobileLeft = true);
-leftBtn.addEventListener("touchend", () => mobileLeft = false);
-rightBtn.addEventListener("touchstart", () => mobileRight = true);
-rightBtn.addEventListener("touchend", () => mobileRight = false);
-boostBtn.addEventListener("touchstart", () => mobileBoost = true);
-boostBtn.addEventListener("touchend", () => mobileBoost = false);
-
-// hud elements
-const speedEl = document.getElementById("speedometer");
-const nitroEl = document.getElementById("nitro");
-function updateSpeedHUD() {
-    const kmh = Math.round(currentSpeed * 300); // arbitrary scale for feel
-    speedEl.innerText = `${kmh} km/h`;
-}
-function updateNitroHUD() {
-    nitroEl.innerText = nitroActive ? "Nitro: ACTIVE" : (nitroReady ? "Nitro: Ready" : `Nitro: cooldown ${Math.ceil(nitroCooldown)}s`);
-}
-
-// physics vars
-let currentSpeed = 0;
 let xVel = 0;
-let speed = 0.45; // base used for road movement
-
-// nitro
+let currentSpeed = 0;
 let nitroReady = true;
 let nitroActive = false;
-let nitroDuration = 2.0; // seconds
 let nitroTimer = 0;
 let nitroCooldown = 0;
 
-// drift
-let isDrifting = false;
-
-// ---------- Input helpers ----------
-function isLeft() {
-    return keys["arrowleft"] || keys["a"] || mobileLeft;
-}
-function isRight() {
-    return keys["arrowright"] || keys["d"] || mobileRight;
-}
-function isDriftKey() {
-    return keys["shift"] || keys["shiftleft"] || keys["shiftright"];
-}
-function isNitroKey() {
-    return keys[" "] || mobileBoost; // space or mobile boost
-}
-
-// ---------- Update car dynamics ----------
-function updateCar() {
+function updateCar(delta) {
     if (!car) return;
 
-    // acceleration toward target maxSpeed
-    let targetMax = currentCarStats.maxSpeed * (nitroActive ? currentCarStats.nitroBoost : 1);
+    let targetMax = currentCarStats.maxSpeed;
+    if (nitroActive) targetMax *= currentCarStats.nitro;
+
     if (currentSpeed < targetMax) {
         currentSpeed += currentCarStats.accel;
-        if (currentSpeed > targetMax) currentSpeed = targetMax;
     } else {
-        // natural friction
-        currentSpeed *= 0.995;
-        if (currentSpeed < 0.01) currentSpeed = 0;
+        currentSpeed *= 0.996;
     }
 
     // steering
-    const handling = currentCarStats.handling * (isDriftKey() ? 1.4 : 1.0);
-    if (isLeft()) xVel -= handling;
-    if (isRight()) xVel += handling;
+    if (keys["arrowleft"] || keys["a"]) xVel -= currentCarStats.handling;
+    if (keys["arrowright"] || keys["d"]) xVel += currentCarStats.handling;
 
-    // drift behavior
-    isDrifting = isDriftKey();
-    if (isDrifting) {
-        // while drift: reduce friction sideways and slight speed penalty
-        xVel *= 0.975;
-        currentSpeed *= currentCarStats.driftFactor;
-    } else {
-        xVel *= 0.85;
-    }
-
-    // clamp lateral position
+    xVel *= 0.9;
     car.position.x += xVel;
+
     if (car.position.x > 4.2) car.position.x = 4.2;
     if (car.position.x < -4.2) car.position.x = -4.2;
 
-    // move road segments backwards (simulate forward movement)
-    for (let i = 0; i < roadSegments.length; i++) {
-        let r = roadSegments[i];
-        r.position.z += currentSpeed * 60; // scale to make movement visible
+    // road movement (MAKE CAR FEEL FAST)
+    roadSegments.forEach(r => {
+        r.position.z += currentSpeed * 120;  // fast ✔
 
-        if (r.position.z > 120) {
-            r.position.z -= roadSegments.length * 60;
+        if (r.position.z > 90) {
+            r.position.z -= 360;
         }
-    }
+    });
 
-    // camera
+    // camera follow + bob
     camera.position.x += (car.position.x * 0.6 - camera.position.x) * 0.08;
-    camera.position.z = car.position.z - 7;
-    camera.position.y = 2.6;
-    camera.lookAt(car.position.x, car.position.y, car.position.z + 10);
+    camera.position.z = -7;
+    camera.position.y = 2.6 + Math.sin(performance.now() * 0.004) * 0.05;
 
-    // nitro logic
-    if (isNitroKey() && nitroReady && !nitroActive) {
+    camera.lookAt(car.position.x, 0.8, 10);
+
+    // nitro
+    if ((keys[" "] || keys["shift"]) && nitroReady) {
         nitroActive = true;
-        nitroTimer = nitroDuration;
         nitroReady = false;
+        nitroTimer = 2;
     }
+
     if (nitroActive) {
-        nitroTimer -= deltaTime;
+        nitroTimer -= delta;
         if (nitroTimer <= 0) {
             nitroActive = false;
-            nitroCooldown = 5.0; // cooldown seconds
+            nitroCooldown = 5;
         }
     } else if (!nitroReady) {
-        nitroCooldown -= deltaTime;
+        nitroCooldown -= delta;
         if (nitroCooldown <= 0) {
             nitroReady = true;
-            nitroCooldown = 0;
         }
     }
-    updateSpeedHUD();
-    updateNitroHUD();
 }
 
-// ---------- Car selection wiring ----------
+// ============================================
+//  CAR SELECT MENU
+// ============================================
+
 document.querySelectorAll(".carBtn").forEach(btn => {
     btn.addEventListener("click", () => {
-        const choice = btn.getAttribute("data-car");
-        spawnCar(choice);
+        spawnCar(btn.dataset.car);
         document.getElementById("carSelectMenu").style.display = "none";
     });
 });
 
-// ---------- Animation loop ----------
-let lastTime = performance.now();
-let deltaTime = 0;
+// default
+spawnCar("audi");
 
+// ============================================
+//  MAIN LOOP
+// ============================================
+
+let last = performance.now();
 function animate() {
-    requestAnimationFrame(animate);
     let now = performance.now();
-    deltaTime = (now - lastTime) / 1000;
-    lastTime = now;
+    let delta = (now - last) / 1000;
+    last = now;
 
-    updateCar();
+    updateCar(delta);
     renderer.render(scene, camera);
+
+    requestAnimationFrame(animate);
 }
 animate();
 
-// ---------- Start with a default car visible (menu shows until pick) ----------
-spawnCar("audi");
-
-// ---------- Resize handler ----------
+// ============================================
+//  RESIZE
+// ============================================
 window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
 });
+
